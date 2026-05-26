@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+python-multipart
+pillow
+rembg
+onnxruntime
+pyembroidery
+opencv-python
+numpy
+anthropic
+python-dotenv
+vtracer
+requests
