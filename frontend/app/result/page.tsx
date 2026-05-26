@@ -11,22 +11,19 @@ type ChatExchange = {
   message: string;
 };
 
+type StitchInfo = {
+  stitch_estimate?: number;
+};
+
 export default function ResultPage() {
-  const [jobId, setJobId] = useState<string | null>(null);
-  const [mounted, setMounted] = useState(false);
+  const [jobId] = useState(() => (typeof window === "undefined" ? null : sessionStorage.getItem("job_id")));
   const [aiStatus, setAIStatus] = useState<AIStatusResponse | null>(null);
-  const [stitchInfo, setStitchInfo] = useState<any>(null);
+  const [stitchInfo, setStitchInfo] = useState<StitchInfo | null>(null);
   const [message, setMessage] = useState("");
   const [chatHistory, setChatHistory] = useState<ChatExchange[]>([]);
   const [isSending, setIsSending] = useState(false);
   const [feedbackError, setFeedbackError] = useState("");
   const [downloadError, setDownloadError] = useState("");
-
-  useEffect(() => {
-    const id = sessionStorage.getItem("job_id");
-    setJobId(id);
-    setMounted(true);
-  }, []);
 
   useEffect(() => {
     getAIStatus()
@@ -72,8 +69,6 @@ export default function ResultPage() {
     }
   }
 
-  if (!mounted) return null;
-
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-white px-4 py-12 sm:px-6 lg:px-8">
       <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[60fr_40fr]">
@@ -81,7 +76,7 @@ export default function ResultPage() {
           <h1 className="text-4xl font-bold tracking-tight text-slate-950">Your design is ready</h1>
           <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
             <img
-              src={mounted && jobId ? getPreviewUrl(jobId) : ""}
+              src={jobId ? getPreviewUrl(jobId) : ""}
               alt="Generated embroidery design preview"
               className="aspect-[4/3] w-full rounded-xl border border-slate-100 object-contain"
             />

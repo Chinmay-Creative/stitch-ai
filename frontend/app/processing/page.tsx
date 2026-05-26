@@ -48,11 +48,6 @@ export default function ProcessingPage() {
   const [activeStep, setActiveStep] = useState(0);
   const [statusText, setStatusText] = useState("Preparing your design");
   const [error, setError] = useState("");
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   useEffect(() => {
     const jobId = sessionStorage.getItem("job_id");
@@ -86,7 +81,6 @@ export default function ProcessingPage() {
 
   return (
     <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center bg-white px-4 py-12 sm:px-6 lg:px-8">
-      {!mounted ? null : (
       <div className="w-full max-w-4xl text-center">
         <h1 className="text-4xl font-bold tracking-tight text-slate-950">Processing your design</h1>
         <p className="mt-4 text-lg text-slate-600">This takes about 30 seconds</p>
@@ -146,7 +140,6 @@ export default function ProcessingPage() {
           </>
         )}
       </div>
-      )}
     </div>
   );
 }

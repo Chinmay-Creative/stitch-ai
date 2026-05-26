@@ -8,13 +8,13 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 
-from routers import admin, export, feedback, process, upload
+from routers import admin, demo, export, feedback, process, upload
 
 app = FastAPI(title="StitchAI", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -24,6 +24,7 @@ for router in (upload.router, feedback.router, export.router, admin.router):
     app.include_router(router, prefix="/api")
 
 app.include_router(process.router)
+app.include_router(demo.router)
 
 
 @app.on_event("startup")

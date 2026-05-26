@@ -6,11 +6,19 @@ import { ImageUp, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { startProcessing, uploadImage } from "@/lib/api";
 
+const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
 const ACCEPTED_TYPES = {
   "image/png": [".png"],
   "image/jpeg": [".jpg", ".jpeg"],
   "image/svg+xml": [".svg"],
 };
+
+const DEMO_DESIGNS = [
+  { name: "star", label: "Star", description: "Simple fill and outline test" },
+  { name: "text", label: "Text", description: "Satin-style text sample" },
+  { name: "circle", label: "Circle", description: "Circular fill region sample" },
+];
 
 function formatFileSize(bytes: number) {
   if (bytes < 1024 * 1024) {
@@ -26,6 +34,7 @@ export default function UploadPage() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [isUploading, setIsUploading] = useState(false);
+  const [activeDemo, setActiveDemo] = useState<string | null>(null);
 
   useEffect(() => {
     return () => {
@@ -78,6 +87,27 @@ export default function UploadPage() {
       setError(uploadError instanceof Error ? uploadError.message : "Upload failed. Please try again.");
     } finally {
       setIsUploading(false);
+    }
+  }
+
+  async function handleDemoRun(name: string) {
+    try {
+      setActiveDemo(name);
+      setError("");
+      const response = await fetch(`${API}/api/demo/run/${name}`, { method: "POST" });
+      const data = await response.json();
+
+      if (!response.ok || data.error || !data.job_id) {
+        throw new Error(data.error || "Could not start the sample design.");
+      }
+
+      sessionStorage.setItem("job_id", data.job_id);
+      await startProcessing(data.job_id);
+      router.push("/processing");
+    } catch (demoError) {
+      setError(demoError instanceof Error ? demoError.message : "Could not start the sample design.");
+    } finally {
+      setActiveDemo(null);
     }
   }
 
@@ -136,6 +166,31 @@ export default function UploadPage() {
             "Digitize Now"
           )}
         </button>
+
+        <section className="mt-14 text-left">
+          <h2 className="text-center text-xl font-bold text-slate-950">Or try a sample design:</h2>
+          <div className="mt-5 grid gap-4 sm:grid-cols-3">
+            {DEMO_DESIGNS.map((design) => (
+              <button
+                key={design.name}
+                type="button"
+                onClick={() => void handleDemoRun(design.name)}
+                disabled={activeDemo !== null}
+                className="rounded-xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:border-[#6366f1] hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-50 text-lg font-bold text-[#6366f1]">
+                  {activeDemo === design.name ? (
+                    <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+                  ) : (
+                    design.label.charAt(0)
+                  )}
+                </div>
+                <h3 className="mt-4 text-base font-bold text-slate-950">{design.label}</h3>
+                <p className="mt-2 text-sm leading-6 text-slate-600">{design.description}</p>
+              </button>
+            ))}
+          </div>
+        </section>
       </div>
     </div>
   );

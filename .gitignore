@@ -1,0 +1,11 @@
+backend/__pycache__/
+backend/**/__pycache__/
+backend/.env
+backend/uploads/
+backend/outputs/
+backend/.venv/
+backend/ml/models/*.pt
+frontend/node_modules/
+frontend/.next/
+*.pyc
+*.pyo

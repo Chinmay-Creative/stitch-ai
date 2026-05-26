@@ -13,6 +13,10 @@ import json
 import math
 import os
 
+import cv2
+import numpy as np
+from services import stitch_engine
+
 
 def pixel_to_units(px: float) -> int:
     """Convert image pixels to pyembroidery 0.1mm units.
@@ -156,17 +160,8 @@ def generate_embroidery_file(job_id: str, format: str) -> str:
 
     pattern = pyembroidery.EmbPattern()
 
-    color_groups = {}
     for region in regions:
         color = region.get("fill_color", "#000000")
-        color_groups.setdefault(color, []).append(region)
-
-    first_color = True
-    for color, group in color_groups.items():
-        if not first_color:
-            pattern.add_command(pyembroidery.COLOR_CHANGE)
-        first_color = False
-
         try:
             r = int(color[1:3], 16)
             g = int(color[3:5], 16)
@@ -176,8 +171,63 @@ def generate_embroidery_file(job_id: str, format: str) -> str:
 
         pattern.add_thread({"color": (r << 16) | (g << 8) | b, "name": f"Thread_{color}"})
 
-        for region in group:
-            stitch_type = region.get("stitch_type", "fill_stitch")
+        contour = region.get("contour")
+        bbox = region.get("bbox", {})
+        x = max(0, int(bbox.get("x", 0)))
+        y = max(0, int(bbox.get("y", 0)))
+        w = max(1, int(bbox.get("w", 10)))
+        h = max(1, int(bbox.get("h", 10)))
+        x2 = min(image_width, x + w)
+        y2 = min(image_height, y + h)
+
+        coords = []
+        stitch_type = region.get("stitch_type", "fill_stitch")
+        density = region.get("density", 4)
+
+        if contour:
+            region_mask = np.zeros((image_height, image_width), dtype=np.uint8)
+            contour_np = np.array(contour, dtype=np.int32)
+            if contour_np.ndim == 3:
+                contour_np = contour_np.reshape(-1, 2)
+            if contour_np.size > 0:
+                cv2.fillPoly(region_mask, [contour_np], 255)
+
+            local_mask = region_mask[y:y2, x:x2]
+            if region.get("underlay", False):
+                underlay_lines = stitch_engine.generate_underlay(local_mask)
+                for start, end in underlay_lines:
+                    coords.append((pixel_to_units(x + start[0]), pixel_to_units(y + start[1])))
+                    coords.append((pixel_to_units(x + end[0]), pixel_to_units(y + end[1])))
+
+            if stitch_type == "running_stitch":
+                pts = contour_np
+                if pts.size > 0:
+                    for i in range(len(pts)):
+                        p0 = pts[i]
+                        p1 = pts[(i + 1) % len(pts)]
+                        dx = int(p1[0] - p0[0])
+                        dy = int(p1[1] - p0[1])
+                        dist = int(math.hypot(dx, dy))
+                        if dist == 0:
+                            continue
+                        step = max(1, dist // 8)
+                        for j in range(0, dist, 8):
+                            t = j / dist
+                            sx = int(p0[0] + dx * t)
+                            sy = int(p0[1] + dy * t)
+                            coords.append((pixel_to_units(sx), pixel_to_units(sy)))
+            elif stitch_type == "satin_stitch":
+                angle = stitch_engine.calculate_region_angle(contour)
+                lines = stitch_engine.generate_satin_stitch_lines(local_mask, angle, density)
+                for start, end in lines:
+                    coords.append((pixel_to_units(x + start[0]), pixel_to_units(y + start[1])))
+                    coords.append((pixel_to_units(x + end[0]), pixel_to_units(y + end[1])))
+            else:
+                fill_stitches = stitch_engine.generate_fill_with_edge_walk(local_mask, density)
+                for _, coord in fill_stitches:
+                    coords.append((pixel_to_units(x + coord[0]), pixel_to_units(y + coord[1])))
+
+        if not coords:
             if stitch_type == "running_stitch":
                 coords = generate_running_stitch_coords(region)
             elif stitch_type == "satin_stitch":
@@ -185,10 +235,10 @@ def generate_embroidery_file(job_id: str, format: str) -> str:
             else:
                 coords = generate_fill_stitch_coords(region)
 
-            for x, y in coords:
-                pattern.add_stitch_absolute(pyembroidery.STITCH, x, y)
+        for cx, cy in coords:
+            pattern.add_stitch_absolute(pyembroidery.STITCH, cx, cy)
 
-            pattern.add_command(pyembroidery.TRIM)
+        pattern.add_command(pyembroidery.TRIM)
 
     pattern.add_command(pyembroidery.END)
 
