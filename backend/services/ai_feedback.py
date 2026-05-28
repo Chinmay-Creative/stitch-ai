@@ -74,14 +74,33 @@ Respond ONLY in this exact JSON format with no other text:
 
 def call_ollama(user_prompt: str) -> str:
     _, _, OLLAMA_BASE_URL, OLLAMA_MODEL, _, _ = get_config()
+    print(f"Calling Ollama model: {OLLAMA_MODEL} at {OLLAMA_BASE_URL}")
+    full_prompt = f"""Embroidery expert. User feedback: "{user_prompt}"
+
+Reply ONLY with JSON:
+{{"understood_problem": "brief issue description", "affected_regions": "all", "parameter_changes": {{"stitch_type": null, "density": null, "angle": null, "length_mm": null}}, "user_message": "one sentence fix explanation", "training_label": "label"}}
+
+Rules: density issue→set density 2-8, rough text→stitch_type satin_stitch density 6, thick border→density 3"""
+
     payload = {
         "model": OLLAMA_MODEL,
-        "prompt": f"System: {SYSTEM_PROMPT}\n\nUser: {user_prompt}",
+        "prompt": full_prompt,
         "stream": False,
+        "options": {
+            "temperature": 0.1,
+            "num_predict": 150,
+            "num_ctx": 512,
+        },
     }
-    r = requests.post(f"{OLLAMA_BASE_URL}/api/generate", json=payload, timeout=30)
+    r = requests.post(
+        f"{OLLAMA_BASE_URL}/api/generate",
+        json=payload,
+        timeout=(10, 60),
+    )
     r.raise_for_status()
-    return r.json()["response"]
+    response = r.json().get("response", "")
+    print(f"Ollama response: {response[:300]}")
+    return response
 
 
 def call_claude(user_prompt: str) -> str:

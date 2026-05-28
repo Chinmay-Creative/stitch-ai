@@ -1,0 +1,3 @@
+{"job_id": "49568939-3dc3-46de-9ce6-f760408f69cd", "feedback": "make the stiches denser", "understood": "Could not parse response", "changes": {}, "label": "parse_error"}
+{"job_id": "d53d35f3-850f-4962-b08a-f0908e8b4255", "feedback": "make the stitches denser", "understood": "Density of stitches needs to be increased", "changes": {"density": 7}, "label": "density"}
+{"job_id": "testjob", "feedback": "make stitches denser", "understood": "Density of fill stitches needs to be increased", "changes": {"stitch_type": null, "density": 7, "angle": null, "length_mm": null}, "label": "density"}

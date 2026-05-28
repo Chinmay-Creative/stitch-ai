@@ -1,1 +1,1 @@
-[{"stitch_type": "fill_stitch", "fill_color": "#000000", "width_mm": 20, "height_mm": 20, "density": 4, "row_spacing_mm": 0.4, "bbox": {"x": 50, "y": 50, "w": 200, "h": 200}}]
+[{"stitch_type": "fill_stitch", "fill_color": "#000000", "width_mm": 20, "height_mm": 20, "density": 7, "row_spacing_mm": 0.4, "bbox": {"x": 50, "y": 50, "w": 200, "h": 200}}]

@@ -1,168 +1,162 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Download, Loader2, Send } from "lucide-react";
-import Link from "next/link";
-import { downloadFile, getAIStatus, getPreviewUrl, getStitchInfo, sendFeedback } from "@/lib/api";
-import type { AIStatusResponse, FeedbackResponse } from "@/lib/types";
-
-type ChatExchange = {
-  role: "user" | "ai";
-  message: string;
-};
-
-type StitchInfo = {
-  stitch_estimate?: number;
-};
+import { useRouter } from "next/navigation";
+import Navbar from "@/components/layout/Navbar";
+import {
+  downloadFile,
+  getAIStatus,
+  getPreviewUrl,
+  getStitchInfo,
+  sendFeedback,
+} from "@/lib/api";
 
 export default function ResultPage() {
-  const [jobId] = useState(() => (typeof window === "undefined" ? null : sessionStorage.getItem("job_id")));
-  const [aiStatus, setAIStatus] = useState<AIStatusResponse | null>(null);
-  const [stitchInfo, setStitchInfo] = useState<StitchInfo | null>(null);
-  const [message, setMessage] = useState("");
-  const [chatHistory, setChatHistory] = useState<ChatExchange[]>([]);
-  const [isSending, setIsSending] = useState(false);
-  const [feedbackError, setFeedbackError] = useState("");
-  const [downloadError, setDownloadError] = useState("");
+  const router = useRouter();
+  const [mounted, setMounted] = useState(false);
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [aiEnabled, setAiEnabled] = useState(false);
+  const [feedbackMessage, setFeedbackMessage] = useState("");
+  const [chatHistory, setChatHistory] = useState<{ role: string; text: string }[]>([]);
+  const [sending, setSending] = useState(false);
+  const [stitchInfo, setStitchInfo] = useState<any>(null);
+  const [downloading, setDownloading] = useState<string | null>(null);
 
   useEffect(() => {
-    getAIStatus()
-      .then(setAIStatus)
-      .catch(() => setAIStatus({ enabled: false, provider: "unknown", ready: false }));
+    const id = sessionStorage.getItem("job_id");
+    setJobId(id);
+    setMounted(true);
 
-    if (jobId) {
-      getStitchInfo(jobId).then(setStitchInfo);
+    if (id) {
+      getAIStatus().then((status) => setAiEnabled(status?.enabled === true));
+      getStitchInfo(id).then((info) => setStitchInfo(info));
     }
-  }, [jobId]);
+  }, []);
 
-  async function handleDownload(format: "dst" | "pes") {
-    if (jobId) {
-      try {
-        setDownloadError("");
-        await downloadFile(jobId, format);
-      } catch {
-        setDownloadError(`We could not download the ${format.toUpperCase()} file yet. Please try again in a moment.`);
-      }
-    }
-  }
-
-  async function handleFeedback() {
-    if (!jobId || !message.trim()) {
-      return;
-    }
-
+  const handleDownload = async (format: "dst" | "pes") => {
+    if (!jobId) return;
+    setDownloading(format);
     try {
-      setIsSending(true);
-      setFeedbackError("");
-      const userMessage = message.trim();
-      setMessage("");
-      setChatHistory((current) => [...current, { role: "user", message: userMessage }]);
-      const response: FeedbackResponse = await sendFeedback(jobId, userMessage);
-      setChatHistory((current) => [
-        ...current,
-        { role: "ai", message: response.message ?? response.status ?? "Feedback received. We will use it to improve this design." },
-      ]);
-    } catch (error) {
-      setFeedbackError(error instanceof Error ? error.message : "Could not send feedback.");
+      await downloadFile(jobId, format);
+    } catch {
+      alert("Download failed. Please try again.");
     } finally {
-      setIsSending(false);
+      setDownloading(null);
     }
-  }
+  };
+
+  const handleFeedback = async () => {
+    if (!feedbackMessage.trim() || !jobId) return;
+    setSending(true);
+    const userMsg = feedbackMessage;
+    setFeedbackMessage("");
+    setChatHistory((prev) => [...prev, { role: "user", text: userMsg }]);
+    try {
+      const result = await sendFeedback(jobId, userMsg);
+      const aiMsg = result?.user_message || "Feedback noted. This will improve future designs.";
+      setChatHistory((prev) => [...prev, { role: "ai", text: aiMsg }]);
+    } catch {
+      setChatHistory((prev) => [...prev, { role: "ai", text: "Could not process feedback. Please try again." }]);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  if (!mounted) return null;
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] bg-white px-4 py-12 sm:px-6 lg:px-8">
-      <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[60fr_40fr]">
+    <div className="min-h-screen bg-white">
+      <Navbar />
+      <div className="mx-auto grid max-w-6xl grid-cols-1 gap-8 px-4 py-12 lg:grid-cols-[1fr_400px]">
         <section>
           <h1 className="text-4xl font-bold tracking-tight text-slate-950">Your design is ready</h1>
           <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-            <img
-              src={jobId ? getPreviewUrl(jobId) : ""}
-              alt="Generated embroidery design preview"
-              className="aspect-[4/3] w-full rounded-xl border border-slate-100 object-contain"
-            />
+            {jobId ? (
+              <img
+                src={getPreviewUrl(jobId)}
+                alt="Generated embroidery design preview"
+                className="aspect-[4/3] w-full rounded-xl border border-slate-100 object-contain"
+              />
+            ) : (
+              <div className="aspect-[4/3] w-full rounded-xl border border-slate-100 bg-slate-50 animate-pulse" />
+            )}
           </div>
         </section>
 
-        <aside className="space-y-6">
-          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 className="text-xl font-bold text-slate-950">Download your files</h2>
-            <div className="mt-5 grid grid-cols-2 gap-3">
+        <aside className="flex flex-col gap-6">
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h2 className="text-lg font-semibold text-slate-900">Download your files</h2>
+            <div className="mt-4 flex gap-3">
               <button
-                type="button"
-                onClick={() => void handleDownload("dst")}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-[#6366f1] bg-white px-4 text-sm font-semibold text-[#6366f1] hover:bg-indigo-50"
+                onClick={() => handleDownload("dst")}
+                disabled={!!downloading}
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-indigo-300 px-4 py-2.5 text-sm font-medium text-indigo-600 hover:bg-indigo-50 disabled:opacity-50"
               >
-                <Download className="h-4 w-4" aria-hidden="true" />
-                Download DST
+                {downloading === "dst" ? "..." : "⬇ Download DST"}
               </button>
               <button
-                type="button"
-                onClick={() => void handleDownload("pes")}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-[#6366f1] bg-white px-4 text-sm font-semibold text-[#6366f1] hover:bg-indigo-50"
+                onClick={() => handleDownload("pes")}
+                disabled={!!downloading}
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-indigo-300 px-4 py-2.5 text-sm font-medium text-indigo-600 hover:bg-indigo-50 disabled:opacity-50"
               >
-                <Download className="h-4 w-4" aria-hidden="true" />
-                Download PES
+                {downloading === "pes" ? "..." : "⬇ Download PES"}
               </button>
             </div>
-            <p className="mt-5 text-sm text-slate-500">
+            <p className="mt-2 text-sm text-slate-500">
               {stitchInfo?.stitch_estimate
                 ? `Estimated stitches: ${stitchInfo.stitch_estimate.toLocaleString()}`
-                : stitchInfo === null
-                ? "Estimated stitches: calculating..."
-                : "Stitch info unavailable"}
+                : "Estimated stitches: calculating..."}
             </p>
-            {downloadError ? <p className="mt-3 text-sm font-medium text-red-600">{downloadError}</p> : null}
-          </section>
+          </div>
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 className="text-xl font-bold text-slate-950">Improve with AI</h2>
-            {aiStatus?.enabled ? (
-              <>
-                <textarea
-                  value={message}
-                  onChange={(event) => setMessage(event.target.value)}
-                  rows={5}
-                  className="mt-5 w-full rounded-lg border border-slate-300 p-3 text-sm text-slate-900 outline-none focus:border-[#6366f1] focus:ring-2 focus:ring-indigo-100"
-                  placeholder="Describe any issues..."
-                />
-                <button
-                  type="button"
-                  onClick={() => void handleFeedback()}
-                  disabled={isSending || !message.trim()}
-                  className="mt-3 inline-flex h-10 items-center justify-center gap-2 rounded-md bg-[#6366f1] px-4 text-sm font-semibold text-white hover:bg-[#5558e6] disabled:cursor-not-allowed disabled:bg-slate-300"
-                >
-                  {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                  Send
-                </button>
-                {feedbackError ? <p className="mt-3 text-sm font-medium text-red-600">{feedbackError}</p> : null}
-                <div className="mt-5 space-y-3">
-                  {chatHistory.map((chat, index) => (
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h2 className="text-lg font-semibold text-slate-900">Improve with AI</h2>
+            {aiEnabled ? (
+              <div className="mt-4 flex flex-col gap-3">
+                <div className="flex flex-col gap-2 max-h-48 overflow-y-auto">
+                  {chatHistory.map((msg, i) => (
                     <div
-                      key={`${chat.role}-${index}`}
-                      className={`rounded-lg p-3 text-sm ${
-                        chat.role === "user" ? "bg-indigo-50 text-slate-900" : "bg-slate-50 text-slate-700"
+                      key={i}
+                      className={`rounded-xl px-4 py-2.5 text-sm ${
+                        msg.role === "user"
+                          ? "bg-indigo-50 text-slate-800 self-end"
+                          : "bg-slate-100 text-slate-700 self-start"
                       }`}
                     >
-                      <p className="font-semibold">{chat.role === "user" ? "You" : "StitchAI"}</p>
-                      <p className="mt-1">{chat.message}</p>
+                      <span className="font-medium block mb-1">{msg.role === "user" ? "You" : "StitchAI"}</span>
+                      {msg.text}
                     </div>
                   ))}
                 </div>
-              </>
+                <textarea
+                  value={feedbackMessage}
+                  onChange={(e) => setFeedbackMessage(e.target.value)}
+                  placeholder="Describe any issues..."
+                  className="w-full rounded-xl border border-slate-200 p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                  rows={3}
+                />
+                <button
+                  onClick={handleFeedback}
+                  disabled={sending || !feedbackMessage.trim()}
+                  className="flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {sending ? "Sending..." : "✈ Send"}
+                </button>
+              </div>
             ) : (
-              <p className="mt-5 text-sm text-slate-500">AI feedback coming soon</p>
+              <p className="mt-3 text-sm text-slate-400">AI feedback coming soon</p>
             )}
-          </section>
+          </div>
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 className="text-xl font-bold text-slate-950">Actions</h2>
-            <Link
-              href="/upload"
-              className="mt-5 inline-flex h-11 w-full items-center justify-center rounded-md bg-[#6366f1] px-4 text-sm font-semibold text-white hover:bg-[#5558e6]"
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h2 className="text-lg font-semibold text-slate-900">Actions</h2>
+            <button
+              onClick={() => router.push("/upload")}
+              className="mt-4 w-full rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-700"
             >
               Process another design
-            </Link>
-          </section>
+            </button>
+          </div>
         </aside>
       </div>
     </div>
