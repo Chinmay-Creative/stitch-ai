@@ -13,6 +13,8 @@ def get_config():
         OLLAMA_MODEL,
         ANTHROPIC_API_KEY,
         CLAUDE_MODEL,
+        GROK_API_KEY,
+        GROK_MODEL,
     )
 
     return (
@@ -22,6 +24,8 @@ def get_config():
         OLLAMA_MODEL,
         ANTHROPIC_API_KEY,
         CLAUDE_MODEL,
+        GROK_API_KEY,
+        GROK_MODEL,
     )
 
 
@@ -32,6 +36,8 @@ def check_provider_connection() -> bool:
         OLLAMA_BASE_URL,
         _,
         ANTHROPIC_API_KEY,
+        _,
+        GROK_API_KEY,
         _,
     ) = get_config()
     if not AI_FEEDBACK_ENABLED:
@@ -44,11 +50,13 @@ def check_provider_connection() -> bool:
             return False
     elif AI_PROVIDER == "claude":
         return len(ANTHROPIC_API_KEY) > 10
+    elif AI_PROVIDER == "grok":
+        return len(GROK_API_KEY) > 10
     return False
 
 
 def is_ai_available() -> dict:
-    AI_FEEDBACK_ENABLED, AI_PROVIDER, _, _, _, _ = get_config()
+    AI_FEEDBACK_ENABLED, AI_PROVIDER, _, _, _, _, _, _ = get_config()
     return {
         "enabled": AI_FEEDBACK_ENABLED,
         "provider": AI_PROVIDER if AI_FEEDBACK_ENABLED else "disabled",
@@ -73,7 +81,7 @@ Respond ONLY in this exact JSON format with no other text:
 
 
 def call_ollama(user_prompt: str) -> str:
-    _, _, OLLAMA_BASE_URL, OLLAMA_MODEL, _, _ = get_config()
+    _, _, OLLAMA_BASE_URL, OLLAMA_MODEL, _, _, _, _ = get_config()
     print(f"Calling Ollama model: {OLLAMA_MODEL} at {OLLAMA_BASE_URL}")
     full_prompt = f"""Embroidery expert. User feedback: "{user_prompt}"
 
@@ -104,7 +112,7 @@ Rules: density issue→set density 2-8, rough text→stitch_type satin_stitch de
 
 
 def call_claude(user_prompt: str) -> str:
-    _, _, _, _, ANTHROPIC_API_KEY, CLAUDE_MODEL = get_config()
+    _, _, _, _, ANTHROPIC_API_KEY, CLAUDE_MODEL, _, _ = get_config()
     import anthropic
 
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
@@ -115,6 +123,34 @@ def call_claude(user_prompt: str) -> str:
         messages=[{"role": "user", "content": user_prompt}],
     )
     return msg.content[0].text
+
+
+def call_grok(user_prompt: str) -> str:
+    _, _, _, _, _, _, GROK_API_KEY, GROK_MODEL = get_config()
+    print(f"Calling Grok model: {GROK_MODEL}")
+    headers = {
+        "Authorization": f"Bearer {GROK_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": GROK_MODEL,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ],
+        "temperature": 0.1,
+        "max_tokens": 200,
+    }
+    r = requests.post(
+        "https://api.x.ai/v1/chat/completions",
+        headers=headers,
+        json=payload,
+        timeout=30,
+    )
+    r.raise_for_status()
+    response = r.json()["choices"][0]["message"]["content"]
+    print(f"Grok response: {response[:200]}")
+    return response
 
 
 def parse_ai_response(text: str) -> dict:
@@ -146,7 +182,7 @@ def apply_changes(regions: list, changes: dict, affected: str) -> list:
 
 
 def process_feedback(job_id: str, user_message: str) -> dict:
-    AI_FEEDBACK_ENABLED, AI_PROVIDER, _, _, _, _ = get_config()
+    AI_FEEDBACK_ENABLED, AI_PROVIDER, _, _, _, _, _, _ = get_config()
     if not AI_FEEDBACK_ENABLED:
         return {
             "success": False,
@@ -173,6 +209,8 @@ def process_feedback(job_id: str, user_message: str) -> dict:
             raw = call_ollama(user_prompt)
         elif AI_PROVIDER == "claude":
             raw = call_claude(user_prompt)
+        elif AI_PROVIDER == "grok":
+            raw = call_grok(user_prompt)
         else:
             raise Exception(f"Unknown provider: {AI_PROVIDER}")
 
